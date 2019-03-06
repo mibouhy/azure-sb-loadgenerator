@@ -1,18 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using CommandLine;
+﻿using CommandLine;
 
 
 namespace LoadGenerator
 {
-    class CommandLineOptionsClass
+    internal class CommandLineOptionsClass
     {
         [Option('t', "threads", Required = true,
             HelpText = "Threads to spawn.", DefaultValue = 5)]
-        public int Threads{ get; set; }
+        public int Threads { get; set; }
 
         [Option('s', "size", Required = true,
             HelpText = "JSON Payload size, real size in bytes = 35 + size", DefaultValue = 1024)]
@@ -35,11 +30,15 @@ namespace LoadGenerator
         public int Checkpoint { get; set; }
 
         [Option('b', "batchmode", Required = false,
-            HelpText = "Send messages in batches of --batchsize size", DefaultValue = true)]
-        public bool BatchMode { get; set; }
+            HelpText = "Send messages in batches of --batchsize size", DefaultValue = 1)]
+        public int BatchMode { get; set; }
 
         [Option("batchsize", Required = false,
             HelpText = "Determines the size of the batch if using batch mode", DefaultValue = 100)]
         public int BatchSize { get; set; }
+
+        [Option("client", Required = false,
+            HelpText = "Type of client - EventHub, QueueClient", DefaultValue = ClientType.EventHub)]
+        public ClientType ClientType { get; set; }
     }
 }

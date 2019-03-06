@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Text;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.ServiceBus.Messaging;
 
 namespace LoadGenerator
 {
@@ -12,98 +10,116 @@ namespace LoadGenerator
     {
         public static int Main(string[] args)
         {
+            var sendMessagesTasksDuration = new Stopwatch();
             try
             {
                 CommandLineOptionsClass commandLineOptions = new CommandLineOptionsClass();
                 var isValid = CommandLine.Parser.Default.ParseArgumentsStrict(args, commandLineOptions);
 
+                ThreadPool.SetMinThreads(commandLineOptions.Threads, commandLineOptions.Threads);
+
+                var sendClient = new SendMessageClient(commandLineOptions.ConnectionString, commandLineOptions.EHOrQueueOrTopicName, commandLineOptions.ClientType);
+
                 var app = new Program();
-                Task.WaitAll(app.MainAsync(commandLineOptions));
+
+                sendMessagesTasksDuration.Start();
+                Task.WaitAll(app.SendMessagesTasks(commandLineOptions, sendClient).ToArray());
+                sendMessagesTasksDuration.Stop();
+
+                sendClient.CloseAsync().Wait();
             }
             catch (Exception e)
             {
-                Console.WriteLine(e.ToString());
+                Console.Error.WriteLine(e.ToString());
                 return 1;
             }
-            Console.WriteLine("Execution Completed");
+            Console.WriteLine($"Execution Completed. Send messages tasks duration: {sendMessagesTasksDuration.Elapsed}");
             return 0;
         }
 
-
-        public async Task MainAsync(CommandLineOptionsClass commandLineOptions)
+        private List<Task> SendMessagesTasks(CommandLineOptionsClass commandLineOptions, SendMessageClient sendClient)
         {
-            List<Task> tasks = new List<Task>();
-            for (int thread = 0; thread < commandLineOptions.Threads; thread++)
+            var tasks = new List<Task>();
+
+            for (int threadId = 0; threadId < commandLineOptions.Threads; threadId++)
             {
-                Task t = Task.Run(async () => {
-                    await GenerateLoad(commandLineOptions);
-                });
+                var t = GenerateLoadPerThread(commandLineOptions, threadId.ToString("0000"), sendClient);
                 tasks.Add(t);
             }
-            Task.WaitAll(tasks.ToArray());
+            return tasks;
         }
 
-        private async Task GenerateLoad(CommandLineOptionsClass commandLineOptions)
+        private async Task GenerateLoadPerThread(CommandLineOptionsClass commandLineOptions, string threadId, SendMessageClient sendClient)
         {
-            string utcTimeStamp;
+            string now;
             string randomPayload;
             string payload;
-            DateTime start;
-            Int64 messageNumber = 0;
-            BrokeredMessage message;
-            List<BrokeredMessage> messageBatch = new List<BrokeredMessage>();
+            var sendingLag = Stopwatch.StartNew();
+            long messageNumber = 0;
+            long failedRequestsCount = 0;
+            long successfulRequestsCount = 0;
 
+            Console.WriteLine($"Thread: {threadId}, started and connected | BatchMode: {commandLineOptions.BatchMode}");
+            var messages = new List<string>();
 
-            QueueClient sendClient = QueueClient.CreateFromConnectionString(commandLineOptions.ConnectionString, commandLineOptions.EHOrQueueOrTopicName);
-            Console.WriteLine($"Thread: {Thread.CurrentThread.ManagedThreadId}, started and connected");
-
-            try
+            while (messageNumber < commandLineOptions.MessagesToSend)
             {
-                start = DateTime.Now;
-                while (messageNumber < commandLineOptions.MessagesToSend || commandLineOptions.MessagesToSend <= 0)
+                messageNumber++;
+                now = DateTime.UtcNow.Ticks.ToString();
+                randomPayload = new Bogus.Randomizer().ClampString("", commandLineOptions.MessageSize, commandLineOptions.MessageSize);
+                payload = string.Format("{{\"dt\":{0},\"payload\":\"{1}\"}}", now, randomPayload);
+
+                if (commandLineOptions.BatchMode == 0)
                 {
-                    utcTimeStamp = ((long)(DateTime.Now - new DateTime(1970, 1, 1)).TotalMilliseconds).ToString();
-                    randomPayload = new Bogus.Randomizer().ClampString("", commandLineOptions.MessageSize, commandLineOptions.MessageSize);
-                    payload = String.Format("{{\"dt\":{0},\"payload\":\"{1}\"}}", utcTimeStamp, randomPayload);
-                    message = new BrokeredMessage(new MemoryStream(Encoding.UTF8.GetBytes(payload)))
+                    try
                     {
-                        ContentType = "application/json",
-                        Label = "MyPayload",
-                        TimeToLive = TimeSpan.FromMinutes(100)
-                    };
-                    if(!commandLineOptions.BatchMode)
-                    {
-                        await sendClient.SendAsync(message);
+                        sendingLag.Restart();
+                        await sendClient.SendAsync(payload).ConfigureAwait(false);
+                        successfulRequestsCount++;
                         if (messageNumber % commandLineOptions.Checkpoint == 0 && messageNumber > 0)
                         {
-                            Console.WriteLine($"Thread: {Thread.CurrentThread.ManagedThreadId}, sent: {messageNumber} / {commandLineOptions.MessagesToSend} messages, message size: {message.Size} bytes, speed: {messageNumber / (DateTime.Now - start).TotalSeconds} msg/sec");
+                            Console.WriteLine($"Thread: {threadId} | sent: {messageNumber} / {commandLineOptions.MessagesToSend} messages | " +
+                                $"speed: {messageNumber / sendingLag.Elapsed.TotalSeconds} msg/sec | sendingLag: {sendingLag.Elapsed}");
                         }
                     }
-                    else
+                    catch (Exception e)
                     {
-                        messageBatch.Add(message);
-                        if((messageNumber % commandLineOptions.BatchSize == 0 && messageNumber > 0) || 
-                            (messageNumber == (commandLineOptions.MessagesToSend - 1)))
+                        failedRequestsCount++;
+                        Console.Error.WriteLine($"Thread: {threadId} | Failed to SendAsync | " +
+                            $"messageNumber: {messageNumber} because of {e.GetType().Name} | successfulRequestsCount: {successfulRequestsCount} | " +
+                            $"failedRequestsCount: {failedRequestsCount} | sendingLag: {sendingLag.Elapsed}");
+                        await Task.Delay(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+                    }
+                }
+                else
+                {
+                    if (messages.Count < commandLineOptions.BatchSize)
+                    {
+                        messages.Add(payload);
+                    }
+                    if (messages.Count >= commandLineOptions.BatchSize || messageNumber >= commandLineOptions.MessagesToSend)
+                    {
+                        try
                         {
-                            await sendClient.SendBatchAsync(messageBatch);
-                            Console.WriteLine($"Thread: {Thread.CurrentThread.ManagedThreadId}, sent: {messageNumber} / {commandLineOptions.MessagesToSend} messages total, in batches of {commandLineOptions.BatchSize}, message size: {message.Size} bytes, speed: {messageNumber / (DateTime.Now - start).TotalSeconds} msg/sec");
-                            messageBatch.Clear();
+                            sendingLag.Restart();
+                            await sendClient.SendBatchAsync(messages).ConfigureAwait(false);
+                            successfulRequestsCount++;
+                            Console.WriteLine($"Thread: {threadId} | sent: {messageNumber} / {commandLineOptions.MessagesToSend} messages total | BatchSize: {commandLineOptions.BatchSize} " +
+                                $"| speed: {messageNumber / sendingLag.Elapsed.TotalSeconds} msg/sec | sendingLag: {sendingLag.Elapsed}");
+                            messages.Clear();
+                        }
+                        catch (Exception e)
+                        {
+                            failedRequestsCount++;
+                            Console.Error.WriteLine($"Thread: {threadId} | Failed to SendBatchAsync | " +
+                                $"messageNumber: {messageNumber} because of {e.GetType().Name} | successfulRequestsCount: {successfulRequestsCount} | " +
+                                $"failedRequestsCount: {failedRequestsCount} | messages.Count: {messages.Count} | sendingLag: {sendingLag.Elapsed}");
+                            await Task.Delay(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
                         }
                     }
-                    messageNumber++;
                 }
             }
-            catch
-            {
-                //ignore, keep bombarding!
-            }
-            finally
-            {
-                await sendClient.CloseAsync();
-                Console.WriteLine($"Thread: {Thread.CurrentThread.ManagedThreadId}, finished");
-            }
+            Console.WriteLine($"Thread: {threadId}, finished | successfulRequestsCount: {successfulRequestsCount} | failedRequestsCount: {failedRequestsCount}");
         }
     }
-
-
 }

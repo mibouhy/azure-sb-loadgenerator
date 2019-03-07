@@ -38,7 +38,11 @@ namespace LoadGenerator
         public int BatchSize { get; set; }
 
         [Option("client", Required = false,
-            HelpText = "Type of client - EventHub, QueueClient", DefaultValue = ClientType.EventHub)]
+            HelpText = "Type of client - EventHub, QueueClient, CloudQueueClient", DefaultValue = ClientType.EventHub)]
         public ClientType ClientType { get; set; }
+
+        [Option('d', "delay", Required = false,
+            HelpText = "Delay per thread between messages in ms", DefaultValue = 0)]
+        public long DelayPerThreadBetweenMessagesInMs { get; set; }
     }
 }

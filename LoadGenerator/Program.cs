@@ -78,16 +78,17 @@ namespace LoadGenerator
                         successfulRequestsCount++;
                         if (messageNumber % commandLineOptions.Checkpoint == 0 && messageNumber > 0)
                         {
-                            Console.WriteLine($"Thread: {threadId} | sent: {messageNumber} / {commandLineOptions.MessagesToSend} messages | " +
-                                $"speed: {messageNumber / sendingLag.Elapsed.TotalSeconds} msg/sec | sendingLag: {sendingLag.Elapsed}");
+                            PrintSpeed(threadId, commandLineOptions, messageNumber, sendingLag, messages.Count);
+                            if (messageNumber < commandLineOptions.MessagesToSend && commandLineOptions.DelayPerThreadBetweenMessagesInMs > 0)
+                            {
+                                await Task.Delay(TimeSpan.FromMilliseconds(commandLineOptions.DelayPerThreadBetweenMessagesInMs)).ConfigureAwait(false);
+                            }
                         }
                     }
                     catch (Exception e)
                     {
                         failedRequestsCount++;
-                        Console.Error.WriteLine($"Thread: {threadId} | Failed to SendAsync | " +
-                            $"messageNumber: {messageNumber} because of {e.GetType().Name} | successfulRequestsCount: {successfulRequestsCount} | " +
-                            $"failedRequestsCount: {failedRequestsCount} | sendingLag: {sendingLag.Elapsed}");
+                        PrintException(threadId, messageNumber, sendingLag, failedRequestsCount, successfulRequestsCount, e);
                         await Task.Delay(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
                     }
                 }
@@ -104,22 +105,41 @@ namespace LoadGenerator
                             sendingLag.Restart();
                             await sendClient.SendBatchAsync(messages).ConfigureAwait(false);
                             successfulRequestsCount++;
-                            Console.WriteLine($"Thread: {threadId} | sent: {messageNumber} / {commandLineOptions.MessagesToSend} messages total | BatchSize: {commandLineOptions.BatchSize} " +
-                                $"| speed: {messageNumber / sendingLag.Elapsed.TotalSeconds} msg/sec | sendingLag: {sendingLag.Elapsed}");
+                            PrintSpeed(threadId, commandLineOptions, messageNumber, sendingLag, messages.Count);
                             messages.Clear();
+
+                            if (messageNumber < commandLineOptions.MessagesToSend && commandLineOptions.DelayPerThreadBetweenMessagesInMs > 0)
+                            {
+                                await Task.Delay(TimeSpan.FromMilliseconds(commandLineOptions.DelayPerThreadBetweenMessagesInMs)).ConfigureAwait(false);
+                            }
                         }
                         catch (Exception e)
                         {
                             failedRequestsCount++;
-                            Console.Error.WriteLine($"Thread: {threadId} | Failed to SendBatchAsync | " +
-                                $"messageNumber: {messageNumber} because of {e.GetType().Name} | successfulRequestsCount: {successfulRequestsCount} | " +
-                                $"failedRequestsCount: {failedRequestsCount} | messages.Count: {messages.Count} | sendingLag: {sendingLag.Elapsed}");
+                            PrintException(threadId, messageNumber, sendingLag, failedRequestsCount, successfulRequestsCount, e);
                             await Task.Delay(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
                         }
                     }
                 }
             }
             Console.WriteLine($"Thread: {threadId}, finished | successfulRequestsCount: {successfulRequestsCount} | failedRequestsCount: {failedRequestsCount}");
+        }
+
+        private void PrintSpeed(string threadId, CommandLineOptionsClass commandLineOptions, long messageNumber, Stopwatch sendingLag, long messagesCount)
+        {
+            Console.WriteLine($"Thread: {threadId} | sent: {messageNumber} / {commandLineOptions.MessagesToSend} messages total | BatchSize: {commandLineOptions.BatchSize} | " +
+                $"potential speed: {(messagesCount / sendingLag.Elapsed.TotalSeconds).ToString("0.0")} msg/sec | " +
+                $"speed: {(messagesCount / (sendingLag.Elapsed.TotalSeconds + (double)commandLineOptions.DelayPerThreadBetweenMessagesInMs / 1000)).ToString("0.0")} msg/sec | " +
+                $"sendingLag: {(long)sendingLag.Elapsed.TotalMilliseconds} ms");
+        }
+
+        private void PrintException(string threadId, long messageNumber, Stopwatch sendingLag, long failedRequestsCount, long successfulRequestsCount, Exception e)
+        {
+            Console.Error.WriteLine($"Thread: {threadId} | messageNumber: {messageNumber} | " +
+                $"{e.GetType().Name} | " +
+                $"success: {successfulRequestsCount} | " +
+                $"failures: {failedRequestsCount} | " +
+                $"sendingLag: {(long)sendingLag.Elapsed.TotalMilliseconds} ms");
         }
     }
 }

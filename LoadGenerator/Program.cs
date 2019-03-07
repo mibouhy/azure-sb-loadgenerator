@@ -69,7 +69,7 @@ namespace LoadGenerator
                 randomPayload = new Bogus.Randomizer().ClampString("", commandLineOptions.MessageSize, commandLineOptions.MessageSize);
                 payload = string.Format("{{\"dt\":{0},\"payload\":\"{1}\"}}", now, randomPayload);
 
-                if (commandLineOptions.BatchMode == 0)
+                if (commandLineOptions.BatchMode.ToLower() == "false")
                 {
                     try
                     {

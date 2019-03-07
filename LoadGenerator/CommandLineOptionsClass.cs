@@ -30,8 +30,8 @@ namespace LoadGenerator
         public int Checkpoint { get; set; }
 
         [Option('b', "batchmode", Required = false,
-            HelpText = "Send messages in batches of --batchsize size", DefaultValue = 1)]
-        public int BatchMode { get; set; }
+            HelpText = "Send messages in batches of --batchsize size", DefaultValue = "true")]
+        public string BatchMode { get; set; }
 
         [Option("batchsize", Required = false,
             HelpText = "Determines the size of the batch if using batch mode", DefaultValue = 100)]

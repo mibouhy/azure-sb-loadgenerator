@@ -78,7 +78,7 @@ namespace LoadGenerator
                         successfulRequestsCount++;
                         if (messageNumber % commandLineOptions.Checkpoint == 0 && messageNumber > 0)
                         {
-                            PrintSpeed(threadId, commandLineOptions, messageNumber, sendingLag, messages.Count);
+                            PrintSpeed(threadId, commandLineOptions, messageNumber, sendingLag, 1);
                             if (messageNumber < commandLineOptions.MessagesToSend && commandLineOptions.DelayPerThreadBetweenMessagesInMs > 0)
                             {
                                 await Task.Delay(TimeSpan.FromMilliseconds(commandLineOptions.DelayPerThreadBetweenMessagesInMs)).ConfigureAwait(false);
@@ -127,10 +127,14 @@ namespace LoadGenerator
 
         private void PrintSpeed(string threadId, CommandLineOptionsClass commandLineOptions, long messageNumber, Stopwatch sendingLag, long messagesCount)
         {
-            Console.WriteLine($"Thread: {threadId} | sent: {messageNumber} / {commandLineOptions.MessagesToSend} messages total | BatchSize: {commandLineOptions.BatchSize} | " +
-                $"potential speed: {(messagesCount / sendingLag.Elapsed.TotalSeconds).ToString("0.0")} msg/sec | " +
-                $"speed: {(messagesCount / (sendingLag.Elapsed.TotalSeconds + (double)commandLineOptions.DelayPerThreadBetweenMessagesInMs / 1000)).ToString("0.0")} msg/sec | " +
-                $"sendingLag: {(long)sendingLag.Elapsed.TotalMilliseconds} ms");
+            var message = $"Thread: {threadId} | sent: {messageNumber} / {commandLineOptions.MessagesToSend} messages total | " +
+                $"sendingLag: {(long)sendingLag.Elapsed.TotalMilliseconds} ms | " +
+                $"speed: {(messagesCount / (sendingLag.Elapsed.TotalSeconds + (double)commandLineOptions.DelayPerThreadBetweenMessagesInMs / 1000)).ToString("0.0")} msg/sec";
+            if (commandLineOptions.DelayPerThreadBetweenMessagesInMs > 0)
+            {
+                message += $" | potential speed: {(messagesCount / sendingLag.Elapsed.TotalSeconds).ToString("0.0")} msg/sec";
+            }
+            Console.WriteLine(message);
         }
 
         private void PrintException(string threadId, long messageNumber, Stopwatch sendingLag, long failedRequestsCount, long successfulRequestsCount, Exception e)

@@ -18,7 +18,7 @@ namespace LoadGenerator
 
                 ThreadPool.SetMinThreads(commandLineOptions.Threads, commandLineOptions.Threads);
 
-                var sendClient = new SendMessageClient(commandLineOptions.ConnectionString, commandLineOptions.EHOrQueueOrTopicName, commandLineOptions.ClientType);
+                var sendClient = MessageClientFactory.CreateMessageClient(commandLineOptions.ConnectionString, commandLineOptions.EHOrQueueOrTopicName, commandLineOptions.ClientType);
 
                 var app = new Program();
 
@@ -37,7 +37,7 @@ namespace LoadGenerator
             return 0;
         }
 
-        private List<Task> SendMessagesTasks(CommandLineOptionsClass commandLineOptions, SendMessageClient sendClient)
+        private List<Task> SendMessagesTasks(CommandLineOptionsClass commandLineOptions, IMessageClient sendClient)
         {
             var tasks = new List<Task>();
 
@@ -49,7 +49,7 @@ namespace LoadGenerator
             return tasks;
         }
 
-        private async Task GenerateLoadPerThread(CommandLineOptionsClass commandLineOptions, string threadId, SendMessageClient sendClient)
+        private async Task GenerateLoadPerThread(CommandLineOptionsClass commandLineOptions, string threadId, IMessageClient sendClient)
         {
             string now;
             string randomPayload;
@@ -141,6 +141,7 @@ namespace LoadGenerator
         {
             Console.Error.WriteLine($"Thread: {threadId} | messageNumber: {messageNumber} | " +
                 $"{e.GetType().Name} | " +
+                $"{e.Message} | " +
                 $"success: {successfulRequestsCount} | " +
                 $"failures: {failedRequestsCount} | " +
                 $"sendingLag: {(long)sendingLag.Elapsed.TotalMilliseconds} ms");

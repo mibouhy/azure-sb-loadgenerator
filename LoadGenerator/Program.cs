@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Azure.EventHubs.Processor;
 
 namespace LoadGenerator
 {
@@ -16,24 +17,42 @@ namespace LoadGenerator
                 CommandLineOptionsClass commandLineOptions = new CommandLineOptionsClass();
                 var isValid = CommandLine.Parser.Default.ParseArgumentsStrict(args, commandLineOptions);
 
-                ThreadPool.SetMinThreads(commandLineOptions.Threads, commandLineOptions.Threads);
+                if (commandLineOptions.ClientType == ClientType.EventHub && !string.IsNullOrEmpty(commandLineOptions.StorageAccountConnectionString))
+                {
+                    //read from event hub
+                    var processorHost = new EventProcessorHost(commandLineOptions.EHOrQueueOrTopicName, "consumerx",
+                        commandLineOptions.ConnectionString, commandLineOptions.StorageAccountConnectionString,
+                        "event-lease-container");
+                    processorHost.RegisterEventProcessorAsync<SimpleEventProcessor>().Wait();
+                    Console.WriteLine("Receiving. Press enter key to stop worker.");
+                    Console.ReadLine();
 
-                var sendClient = MessageClientFactory.CreateMessageClient(commandLineOptions.ConnectionString, commandLineOptions.EHOrQueueOrTopicName, commandLineOptions.ClientType);
+                    // Disposes of the Event Processor Host
+                    processorHost.UnregisterEventProcessorAsync().Wait();
+                }
+                else
+                {
+                    //otherwise write logic
 
-                var app = new Program();
+                    ThreadPool.SetMinThreads(commandLineOptions.Threads, commandLineOptions.Threads);
 
-                sendMessagesTasksDuration.Start();
-                Task.WaitAll(app.SendMessagesTasks(commandLineOptions, sendClient).ToArray());
-                sendMessagesTasksDuration.Stop();
+                    var sendClient = MessageClientFactory.CreateMessageClient(commandLineOptions.ConnectionString, commandLineOptions.EHOrQueueOrTopicName, commandLineOptions.ClientType);
 
-                sendClient.CloseAsync().Wait();
+                    var app = new Program();
+
+                    sendMessagesTasksDuration.Start();
+                    Task.WaitAll(app.SendMessagesTasks(commandLineOptions, sendClient).ToArray());
+                    sendMessagesTasksDuration.Stop();
+
+                    sendClient.CloseAsync().Wait();
+                }
             }
             catch (Exception e)
             {
                 Console.Error.WriteLine(e.ToString());
                 return 1;
             }
-            Console.WriteLine($"Execution Completed. Send messages tasks duration: {sendMessagesTasksDuration.Elapsed}");
+            Console.WriteLine($"Execution Completed. Duration: {sendMessagesTasksDuration.Elapsed}");
             return 0;
         }
 

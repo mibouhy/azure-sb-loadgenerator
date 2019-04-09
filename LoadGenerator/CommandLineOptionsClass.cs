@@ -44,5 +44,9 @@ namespace LoadGenerator
         [Option('d', "delay", Required = false,
             HelpText = "Delay per thread between messages in ms", DefaultValue = 0)]
         public long DelayPerThreadBetweenMessagesInMs { get; set; }
+
+        [Option('a', "storageaccount", Required = false,
+            HelpText = "Storage account connection string")]
+        public string StorageAccountConnectionString { get; set; }
     }
 }

@@ -56,7 +56,7 @@ namespace LoadGenerator
             return 0;
         }
 
-        private List<Task> SendMessagesTasks(CommandLineOptionsClass commandLineOptions, IMessageClient sendClient)
+        private List<Task> SendMessagesTasks(CommandLineOptionsClass commandLineOptions, IClientSender sendClient)
         {
             var tasks = new List<Task>();
 
@@ -68,7 +68,7 @@ namespace LoadGenerator
             return tasks;
         }
 
-        private async Task GenerateLoadPerThread(CommandLineOptionsClass commandLineOptions, string threadId, IMessageClient sendClient)
+        private async Task GenerateLoadPerThread(CommandLineOptionsClass commandLineOptions, string threadId, IClientSender sendClient)
         {
             string now;
             string randomPayload;

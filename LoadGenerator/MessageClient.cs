@@ -9,10 +9,11 @@ using Microsoft.ServiceBus;
 using Microsoft.ServiceBus.Messaging;
 using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Queue;
+using Newtonsoft.Json;
 
 namespace LoadGenerator
 {
-    public interface IMessageClient
+    public interface IClientSender
     {
         Task SendAsync(string payload);
 
@@ -21,7 +22,7 @@ namespace LoadGenerator
         Task CloseAsync();
     }
 
-    public class MessageQueueClient : IMessageClient
+    public class MessageQueueClient : IClientSender
     {
         QueueClient _queueClient = null;
 
@@ -75,14 +76,13 @@ namespace LoadGenerator
         }
     }
 
-    public class MessageEventHubClient : IMessageClient
+    public class MessageEventHubClient : IClientSender
     {
         EventHubClient _sendEventHubClient = null;
 
         public MessageEventHubClient(string connectionString, string eHOrQueueOrTopicName)
         {
             Console.WriteLine($"MessageClient | eHOrQueueOrTopicName:{eHOrQueueOrTopicName}");
-
             var mf = MessagingFactory.CreateFromConnectionString(connectionString + ";TransportType=Amqp" + ";OperationTimeout=00:00:02");
             _sendEventHubClient = mf.CreateEventHubClient(eHOrQueueOrTopicName);
         }
@@ -105,7 +105,7 @@ namespace LoadGenerator
         }
     }
 
-    public class MessageCloudQueueClient : IMessageClient
+    public class MessageCloudQueueClient : IClientSender
     {
         CloudQueue _cloudQueue = null;
 
@@ -141,37 +141,29 @@ namespace LoadGenerator
         }
     }
 
-    public class MessageEventGridClient : IMessageClient
+    public class EventGridClientSender : IClientSender
     {
         EventGridClient _sendEventGridClient = null;
         private string _topicHostname;
         /// <summary>
-        /// Connection string is comma separated values. 
-        /// Expected values are Endpoint, TopicKey
-        /// Example "Endpoint=http://sfdsdfsdfsdfsdf,TopicKey=dfxxxcfxcfxf"
+        /// Connection string is dictionnary of key-value: Host:TopicKey
+        /// Example {'super-host.net':'myKey'}
         /// </summary>
         /// <param name="connectionString"></param>
         /// <param name="eHOrQueueOrTopicName"></param>
-        public MessageEventGridClient(string connectionString, string eHOrQueueOrTopicName)
+        public EventGridClientSender(string connectionString, string eHOrQueueOrTopicName)
         {
-            Console.WriteLine($"MessageClient | eHOrQueueOrTopicName:{eHOrQueueOrTopicName}");
-            var keyValues = connectionString.Split(',');
-            string topicKey = string.Empty;
+            Console.WriteLine($"MessageClient | eHOrQueueOrTopicName:{eHOrQueueOrTopicName}  connectionString: {connectionString}");
 
-            foreach (var keyValue in keyValues)
+            var accountList = JsonConvert.DeserializeObject<Dictionary<string, string>>(connectionString);
+
+            var topicKey = "";
+            foreach (var accountData in accountList)
             {
-                var kv = keyValue.Split('=');
-                if (kv[0] == "Endpoint")
-                {
-                    _topicHostname = new Uri(kv[1]).Host;
-                }
-                if (kv[0] == "TopicKey")
-                {
-                    topicKey = kv[1] + "=";
-                }
+                _topicHostname = accountData.Key;
+                topicKey = accountData.Value;
             }
-            TopicCredentials topicCredentials = new TopicCredentials(topicKey);
-            _sendEventGridClient = new EventGridClient(topicCredentials);
+            _sendEventGridClient = new EventGridClient(new TopicCredentials(topicKey));
         }
 
         public Task SendAsync(string payload)

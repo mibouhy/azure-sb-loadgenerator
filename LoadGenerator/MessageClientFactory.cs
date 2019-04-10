@@ -4,7 +4,7 @@ namespace LoadGenerator
 {
     public static class MessageClientFactory
     {
-        public static IMessageClient CreateMessageClient(string connectionString, string eHOrQueueOrTopicName, ClientType clientType)
+        public static IClientSender CreateMessageClient(string connectionString, string eHOrQueueOrTopicName, ClientType clientType)
         {
             switch (clientType)
             {
@@ -15,7 +15,7 @@ namespace LoadGenerator
                 case ClientType.QueueClient:
                     return new MessageQueueClient(connectionString, eHOrQueueOrTopicName);
                 case ClientType.EventGridClient:
-                    return new MessageEventGridClient(connectionString, eHOrQueueOrTopicName);
+                    return new EventGridClientSender(connectionString, eHOrQueueOrTopicName);
                 case ClientType.Undefined:
                 default:
                     throw new NotImplementedException();

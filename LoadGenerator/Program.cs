@@ -20,7 +20,7 @@ namespace LoadGenerator
                 if (commandLineOptions.ClientType == ClientType.EventHub && !string.IsNullOrEmpty(commandLineOptions.StorageAccountConnectionString))
                 {
                     //read from event hub
-                    var processorHost = new EventProcessorHost(commandLineOptions.EHOrQueueOrTopicName, "consumerx",
+                    var processorHost = new EventProcessorHost(commandLineOptions.EHOrQueueOrTopicName, "localconsole",
                         commandLineOptions.ConnectionString, commandLineOptions.StorageAccountConnectionString,
                         "event-lease-container");
                     processorHost.RegisterEventProcessorAsync<SimpleEventProcessor>().Wait();

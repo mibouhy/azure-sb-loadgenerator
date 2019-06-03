@@ -4,6 +4,8 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Azure.EventHubs;
 using Microsoft.Azure.EventHubs.Processor;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace LoadGenerator
 {
@@ -29,13 +31,19 @@ namespace LoadGenerator
 
         public async Task ProcessEventsAsync(PartitionContext context, IEnumerable<EventData> messages)
         {
-            //            Console.WriteLine($"Message received. But will simulate delay of 1sec");
-            //            await Task.Delay(1000);
-
             foreach (var eventData in messages)
             {
                 var data = Encoding.UTF8.GetString(eventData.Body.Array, eventData.Body.Offset, eventData.Body.Count);
-                Console.WriteLine($"Message received. Partition: '{context.PartitionId}', Data: '{data}'");
+                try
+                {
+                    JToken parsedJson = JToken.Parse(data);
+                    var beautified = parsedJson.ToString(Formatting.Indented);
+                    Console.WriteLine($"Message received. Partition: '{context.PartitionId}', fdr: '{beautified}'");
+                }
+                catch (Exception)
+                {
+                    Console.WriteLine($"Message received. Partition: '{context.PartitionId}', fdr: '{data}'");
+                }
             }
             await context.CheckpointAsync();
         }

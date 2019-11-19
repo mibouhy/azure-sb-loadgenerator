@@ -14,13 +14,15 @@ namespace LoadGenerator
             var sendMessagesTasksDuration = new Stopwatch();
             try
             {
+                Console.WriteLine("Hi!");
+
                 CommandLineOptionsClass commandLineOptions = new CommandLineOptionsClass();
                 var isValid = CommandLine.Parser.Default.ParseArgumentsStrict(args, commandLineOptions);
 
                 if (commandLineOptions.ClientType == ClientType.EventHub && !string.IsNullOrEmpty(commandLineOptions.StorageAccountConnectionString))
                 {
                     //read from event hub
-                    var processorHost = new EventProcessorHost(commandLineOptions.EHOrQueueOrTopicName, "localconsole",
+                    var processorHost = new EventProcessorHost(commandLineOptions.EHOrQueueOrTopicName, "consumerx",
                         commandLineOptions.ConnectionString, commandLineOptions.StorageAccountConnectionString,
                         "event-lease-container");
                     processorHost.RegisterEventProcessorAsync<SimpleEventProcessor>().Wait();

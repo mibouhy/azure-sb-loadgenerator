@@ -33,6 +33,14 @@ namespace LoadGenerator
         {
             foreach (var eventData in messages)
             {
+                Console.WriteLine($"Message received. Partition: '{context.PartitionId}' >>>>>>>>>>>>>>>>>>> ");
+
+                foreach (var property in eventData.Properties)
+                {
+                    Console.WriteLine($"Message received. Partition: '{context.PartitionId}', Property: '{property}'");
+                }
+
+
                 var data = Encoding.UTF8.GetString(eventData.Body.Array, eventData.Body.Offset, eventData.Body.Count);
                 try
                 {
@@ -44,6 +52,7 @@ namespace LoadGenerator
                 {
                     Console.WriteLine($"Message received. Partition: '{context.PartitionId}', fdr: '{data}'");
                 }
+                Console.WriteLine($"Message received. Partition: '{context.PartitionId}' <<<<<<<<<<<<<<<<<< ");
             }
             await context.CheckpointAsync();
         }
